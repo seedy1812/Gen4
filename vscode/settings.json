@@ -1,0 +1,5 @@
+{
+    "terminal.integrated.enablePersistentSessions": false,
+    "terminal.integrated.persistentSessionReviveProcess": "never",
+    "cmake.configureOnOpen": true
+}
