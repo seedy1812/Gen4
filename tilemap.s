@@ -324,9 +324,6 @@ GEN_4_144 macro
         endm
 
 tn_cooper:
-;                COPPER_WAIT 32,0
-;                COPPER_MOVE LAYER3_SCROLL_X_LSB,125
-        
 
                 COPPER_WAIT 55,0
 

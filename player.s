@@ -136,14 +136,14 @@ DMA_CONTINUOUS                 equ %10101101
 CLS_INDEX equ $ff
 
 bordera macro
-         out ($fe),a
+;         out ($fe),a
         endm
 
 border macro
-	push af
-    ld a,\0
-    bordera
-	pop af
+;	push af
+;    ld a,\0
+;    bordera
+;	pop af
     endm
 
 MY_BREAK	macro
