@@ -1,4 +1,11 @@
-
+;
+;NextREG 21 (15h) – Sprite and Layer System Setup
+;Data Bits
+;
+;Sprite Priority n n
+;0 Sprite 127 on top
+;1 Sprite 0 on top
+;
 
 
 ;NextRegs
@@ -16,6 +23,7 @@ CPU_SPEED				equ $07
 LINE_INT_CTRL		 	equ $22 
 LINE_INT_LSB		 	equ $23
 
+
 SPRITE_LAYERS_SYSTEM 	equ $15
 ULA_CONTROL			 	equ $68
 
@@ -27,6 +35,9 @@ SPRITE_CLIP_WINDOW		 equ $19
 LAYER0_CLIP_WINDOW	 	equ $1a
 LAYER3_CLIP_WINDOW	 	equ $1b
 CLIP_WINDOW_CTRL	 	equ $1c 
+
+Active_Video_Line_MSB	equ $1e
+Active_Video_Line_LSB	equ $1f
 
 ULA_SCROLL_X 		 	equ $26
 ULA_SCROLL_Y 		 	equ $27
@@ -67,9 +78,9 @@ MMU_Slot6				equ $56
 MMU_Slot7				equ $57
 
 
-SPA_2_XM equ %1000
-SPA_2_YM equ %0100
-SPA_2_R  equ %0010
+SPA_2_XM equ 	%1000
+SPA_2_YM equ 	%0100
+SPA_2_R  equ 	%0010
 
 SPA_2_PAL_0  equ (00 << 4)
 SPA_2_PAL_1  equ (01 << 4)
@@ -100,6 +111,25 @@ NEXT_DMA_PORT    	 	equ $6b ;//: zxnDMA
 LAYER2_OUT			 	equ $123B
 SPRITE_ATTRIBUTE_OUT    equ $57
 SPRITE_INDEX_OUT    	equ $303b
+
+DMA_RESET                      equ $c3
+DMA_RESET_PORT_A_TIMING        equ $c7
+DMA_RESET_PORT_B_TIMING        equ $cb
+DMA_LOAD                       equ $cf ; %11001111
+DMA_CONTINUE                   equ $d3
+DMA_DISABLE_INTERUPTS          equ $af
+DMA_ENABLE_INTERUPTS           equ $ab
+DMA_RESET_DISABLE_INTERUPTS    equ $a3
+DMA_ENABLE_AFTER_RETI          equ $b7
+DMA_READ_STATUS_BYTE           equ $bf
+DMA_REINIT_STATUS_BYTE         equ $8b
+DMA_START_READ_SEQUENCE        equ $a7
+DMA_FORCE_READY                equ $b3
+DMA_DISABLE                    equ $83
+DMA_ENABLE                     equ $87
+DMA_WRITE_REGISTER_COMMAND     equ $bb
+DMA_BURST                      equ %11001101
+DMA_CONTINUOUS                 equ %10101101
 
 ;TILE_DEF_ATTR_PAL macro LO(\0*16) endm
 
@@ -158,23 +188,21 @@ start:
 	nextreg CPU_SPEED,%11 ; 28mhz
 	nextreg SPRITE_TRANS_INDEX,0            ; sprites transpanecy index
 
-	nextreg PAL_FALLBACK_COLOUR ,0
+	nextreg PAL_FALLBACK_COLOUR ,$0
 
 	nextreg GLOBAL_TRANS_COLOR,$e3
 
-	call bitmap_init
 	call sprites_init
 	call tilemap_init
+	call bitmap_init
 
 	call init_vbl
 
 frame_loop:
-	call bitmap_update
-	border 1
-	call tm_update
-	border 2
 	call tm_copper
-	border 3
+	call tm_update
+	call bitmap_update
+	border 7
 ;	call sprites_update
 ;	border 4
 
@@ -187,10 +215,11 @@ frame_loop:
 
  
 StackEnd:
-	ds	128*3
+	ds	128*4
 StackStart:
 	ds  2
 
+include "line_routines.s"
 include "irq.s"
 include "video.s"
 include "tilemap.s"

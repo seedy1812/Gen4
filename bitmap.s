@@ -33,10 +33,9 @@ bitmap_init:
     ret
 
 bitmap_update:
-    ld a ,LAYER2_SCROLL_X_LSB
-    call ReadNextReg
-    sub 8
-    and 63
+    ld ix,tm_speeds_mid
+    xor a
+    sub (ix+2)
     nextreg LAYER2_SCROLL_X_LSB,a
     ret
 

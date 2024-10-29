@@ -18,57 +18,62 @@ _\0_pal_size: equ *-_\0_pal
         endm
 
 all_sprites:
+sprites line7
 sprites line1
 sprites line2
 sprites line3
 sprites line4
-sprites line5a
+sprites line5_2
+sprites line6_1
 sprites line6a
 
-sprites7 7_11
-sprites7 7_12
-sprites7 7_13
-sprites7 7_22
-sprites7 7_23
-sprites7 7_24
-sprites7 7_33
-sprites7 7_34
-sprites7 7_44
 all_sprites_size: equ *-all_sprites
 
-all_palettes:
+
+all0_palettes:
+palettes line7
+all0_palettes_size: equ *-all0_palettes
+
+all1_palettes:
 palettes line1
 palettes line2
 palettes line3
 palettes line4
-palettes line5a
+palettes line5_2
+palettes line6_1
 palettes line6a
+all1_palettes_size: equ *-all1_palettes
 
-palettes7 7_11
-palettes7 7_12
-palettes7 7_13
-palettes7 7_22
-palettes7 7_23
-palettes7 7_24
-palettes7 7_33
-palettes7 7_34
-palettes7 7_44
-all_palettes_size: equ *-all_palettes
+
+
 
 sprites_init
     ld a,0
     ld hl, all_sprites
-    ld b,   HI(all_sprites_size+254)
+    ld b,   HI(all_sprites_size+255)
     call upload_sprites
 
 
     nextreg PAL_CTRL,%00100001
     nextreg PAL_INDEX,0
 
-    ld bc, all_palettes_size/2
+    ld b, +($e0/2)
+    ld hl, all0_palettes
+.pal_lp0:
+    ld a,(hl)
+    nextreg PAL_VALUE_9BIT,a
+    inc hl
 
-    ld hl, all_palettes
-.pal_lp:
+    ld a,(hl)
+    nextreg PAL_VALUE_9BIT,a
+    inc hl
+
+    djnz .pal_lp0
+
+    ld bc, all1_palettes_size/2
+
+    ld hl, all1_palettes
+.pal_lp1:
     ld a,(hl)
     nextreg PAL_VALUE_9BIT,a
     inc hl
@@ -81,7 +86,8 @@ sprites_init
 
     ld a,b
     or c
-    jr nz,.pal_lp
+    jr nz,.pal_lp1
+
 
     call create_sprites  
 
@@ -168,7 +174,7 @@ upload:
 
 SPR_ATTRIB_4_COMPOSITE equ %00100000
 
-set_sprite_first: macro
+set_sprite_first16: macro
 
         ld (ix+0),c
         ld (ix+1),e
@@ -198,6 +204,7 @@ set_sprite_first: macro
         exx
         endm
 
+
 set_sprite_next: macro
 
         ld (ix+0),c
@@ -219,8 +226,40 @@ set_sprite_next: macro
         exx
         endm
 
+set_sprite_first256: macro
 
-settiles:
+        ld (ix+0),c
+        ld (ix+1),e
+
+        ld a,1                  ; 9 bit check x
+        and b
+        or h
+        ld (ix+2),a
+
+        ld a,0
+        or %11000000
+        ld (ix+3),a
+
+        ld a,1                  ; 9 bit check y
+        and d
+        ;jr z,.no9bity
+;.no9bity
+        or %00100000            ; T= 1(unified), H = 0
+ 
+        ld (ix+4),a
+
+        ld bc,16                ; x offset
+        ld de,0                 ; y offset
+
+        exx
+        add ix,de
+        exx
+        endm
+
+
+
+
+settiles16:
         ld b, a ; volume in bytes
         ld c,d
         ld a,d
@@ -270,6 +309,69 @@ settiles:
         ret
 
 
+settiles256:
+        ld b, a ; volume in bytes
+        ld c,d
+        ld a,d
+        ld (.anchor_tile),a
+.lp:
+        ld a,%11000000
+        and (ix+4)
+        cp %01000000
+        jr nz ,.not_relative_pattern
+.relative_sprite:
+        bit 0,(ix+4)
+        ld a,c
+        jr z,.not_relative_pattern
+ .anchor_tile: def *+1
+        sub 00
+        and 63
+;        srl a
+;        jr nc, .rel_bit7_notset
+;        set 5,(ix+4)
+.rel_bit7_notset:
+        jr .cont
+
+.not_relative_pattern:
+        ld a,c
+        ld (.anchor_tile),a
+.all_fine:
+;        srl a
+ ;       jr nc, .cont
+ ;       set 6,(ix+4)
+ .cont:
+        or %11000000
+        ld (ix+3),a
+
+        inc c
+        ld a,c
+        cp e
+        jr nz,.ok
+        ld c,d
+.ok:
+        exx
+        add ix,de       ; add 5 to ix
+        exx
+
+        inc iyl
+        add bc,-4*256
+        djnz .lp
+        ret
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 volume: macro
         push hl
         ld de ,\0
@@ -285,6 +387,12 @@ volume: macro
         endm
 
 
+
+MIN_MAX macro  
+        ; \2
+        ld de,+(\0+\2) * 256 +(\1+\2)
+        endm
+
 ;####################################################################
 ;;;;;; bc = x
 ; de = y
@@ -297,160 +405,342 @@ LINE_OF_SPRITES:
         exx
 
         ld de,0
-        ld h, SPA_2_PAL_0
+        ld h, SPA_2_PAL_7
         ld l,0
         ld ix ,my_buffert1
  
-        call create_line
+        call create_line16
 
         volume my_buffert1
  
         ld c,0
-        ld de,$0001
+        MIN_MAX 0,1,32
         ld ix ,my_buffert1
-        call settiles
+        call settiles16
         ;;;;;;;;;;;;;;;;;;;;;
 
         ld de,8
-        ld h, SPA_2_PAL_1
+        ld h, SPA_2_PAL_8
         ld l,0
         ld ix ,my_buffert2
 
-        call create_line
+        call create_line16
         volume my_buffert2
 
         ld c,0
-        ld de,$0102
+        MIN_MAX 1,2,32 
         ld ix ,my_buffert2
-        call settiles
+        call settiles16
 
         ;;;;;;;;;;;;;;;;;;;;;
 
         ld de,16
-        ld h, SPA_2_PAL_2
+        ld h, SPA_2_PAL_9
         ld l,0
         ld ix ,my_buffert3
-        call create_line
+        call create_line16
         volume my_buffert3
 
         ld c,0
-        ld de,$0204
+        MIN_MAX 2,4,32
         ld ix ,my_buffert3
-        call settiles
+        call settiles16
 
         ;;;;;;;;;;;;;;;;;;;;;
         
         ld de,24
-        ld h, SPA_2_PAL_3
+        ld h, SPA_2_PAL_10
         ld l,0
         ld ix ,my_buffert4
-        call create_line
+        call create_line16
         volume my_buffert4
 
 
         ld c,0
-        ld de,$0406
+        MIN_MAX 4,6,32
         ld ix ,my_buffert4
-        call settiles
+        call settiles16
 
         ;;;;;;;;;;;;;;;;;;;;;
         
-        ld de,32+8
-        ld h, SPA_2_PAL_4
+        ld de,32
+        ld h, SPA_2_PAL_11
         ld l,0
-        ld ix ,my_buffert5
-        call create_line
-        volume my_buffert5
+        ld ix ,my_buffert5_1
+        call create_line16
+        volume my_buffert5_1
 
         ld c,0
-        ld de,$0609
-        ld ix ,my_buffert5
-        call settiles
+        MIN_MAX 6,9,32
+        ld ix ,my_buffert5_1
+        call settiles16
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+        ld de,40
+        ld h, SPA_2_PAL_11
+        ld l,0
+        ld ix ,my_buffert5_2
+        call create_line16
+        volume my_buffert5_2
+
+        ld c,0
+        MIN_MAX 9,12,32
+        ld ix ,my_buffert5_2
+        call settiles16
+
+        ld de,40
+        ld h, SPA_2_PAL_12
+        ld l,0
+        ld ix ,my_buffert6_1
+        call create_line16
+        volume my_buffert6_1
+
+        ld c,0
+        MIN_MAX 12,15,32
+        ld ix ,my_buffert6_1
+        call settiles16
+;;
+
+        ld de,48+8
+        ld h, SPA_2_PAL_13
+        ld l,0
+        ld ix ,my_buffert6_2
+        call create_line16
+        volume my_buffert6_2
+
+        ld c,0
+        MIN_MAX 15,18,32
+        ld ix ,my_buffert6_2
+        call settiles16
+
+        ld de,48+16*1-8
+        ld h, SPA_2_PAL_0
+        ld l,0
+        ld ix ,my_buffert7_1
+        call create_line256
+        volume my_buffert7_1
+
+        ld c,0
+        MIN_MAX 0,4,0
+        ld ix ,my_buffert7_1
+        call settiles256
+;;
+
+        ld de,48+16*2-8
+        ld h, SPA_2_PAL_0
+        ld l,0
+        ld ix ,my_buffert7_2
+        call create_line256
+        volume my_buffert7_2
+
+        ld c,0
+        MIN_MAX 4,8,0
+        ld ix ,my_buffert7_2
+        call settiles256
+
+;;
+        ld de,48+16*3-8
+        ld h, SPA_2_PAL_0
+        ld l,0
+        ld ix ,my_buffert7_3
+        call create_line256
+        volume my_buffert7_3
+
+        ld c,0
+        MIN_MAX 8,12,0
+        ld ix ,my_buffert7_3
+        call settiles256
+
+;;
+        ld de,48+16*4-8
+        ld h, SPA_2_PAL_0
+        ld l,0
+        ld ix ,my_buffert7_4
+        call create_line256
+        volume my_buffert7_4
+
+        ld c,0
+        MIN_MAX 12,16,0
+        ld ix ,my_buffert7_4
+        call settiles256
+
+      
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
         ld de,256-16
-        ld h, SPA_2_PAL_0 + SPA_2_YM
+        ld h, SPA_2_PAL_7 + SPA_2_YM
         ld l,0
         ld ix ,my_bufferb1
-        call create_line
+        call create_line16
 
         volume my_bufferb1
  
         ld c,0
-        ld de,$0001
+        MIN_MAX 0,1,32
         ld ix ,my_bufferb1
-        call settiles
+        call settiles16
         ;;;;;;;;;;;;;;;;;;;;;
 
         ld de,256-24
-        ld h, SPA_2_PAL_1 + SPA_2_YM
+        ld h, SPA_2_PAL_8 + SPA_2_YM
         ld l,0
         ld ix ,my_bufferb2
 
-        call create_line
+        call create_line16
         volume my_bufferb2
 
         ld c,0
-        ld de,$0102
+        MIN_MAX 1,2,32
         ld ix ,my_bufferb2
-        call settiles
+        call settiles16
 
         ;;;;;;;;;;;;;;;;;;;;;
 
         ld de,256-32
-        ld h, SPA_2_PAL_2 + SPA_2_YM
+        ld h, SPA_2_PAL_9 + SPA_2_YM
         ld l,0
         ld ix ,my_bufferb3
-        call create_line
+        call create_line16
         volume my_bufferb3
 
         ld c,0
-        ld de,$0204
+        MIN_MAX 2,4,32
         ld ix ,my_bufferb3
-        call settiles
+        call settiles16
 
         ;;;;;;;;;;;;;;;;;;;;;
         
         ld de,256-40
-        ld h, SPA_2_PAL_3 + SPA_2_YM
+        ld h, SPA_2_PAL_10 + SPA_2_YM
         ld l,0
         ld ix ,my_bufferb4
-        call create_line
+        call create_line16
         volume my_bufferb4
 
 
         ld c,0
-        ld de,$0406
+        MIN_MAX 4,6,32
         ld ix ,my_bufferb4
-        call settiles
+        call settiles16
 
         ;;;;;;;;;;;;;;;;;;;;;
         
-        ld de,256-56
-        ld h, SPA_2_PAL_4 + SPA_2_YM
+        ld de,256-48
+        ld h, SPA_2_PAL_11 + SPA_2_YM
         ld l,0
-        ld ix ,my_bufferb5
-        call create_line
-        volume my_bufferb5
+        ld ix ,my_bufferb5_1
+        call create_line16
+        volume my_bufferb5_1
 
 
         ld c,0
-        ld de,$0609
-        ld ix ,my_bufferb5
-        call settiles
+        MIN_MAX 6,9,32
+        ld ix ,my_bufferb5_1
+        call settiles16
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+        ld de,256-48-16+8
+        ld h, SPA_2_PAL_11 + SPA_2_YM
+        ld l,0
+        ld ix ,my_bufferb5_2
+        call create_line16
+        volume my_bufferb5_2
+
+        ld c,0
+        MIN_MAX 9,12,32
+        ld ix ,my_bufferb5_2
+        call settiles16
+
+        ld de,256-48-16+8
+        ld h, SPA_2_PAL_12 + SPA_2_YM
+        ld l,0
+        ld ix ,my_bufferb6_1
+        call create_line16
+        volume my_bufferb6_1
+
+        ld c,0
+        MIN_MAX 12,15,32
+        ld ix ,my_bufferb6_1
+        call settiles16
+;;
+
+        ld de,256-56-16
+        ld h, SPA_2_PAL_13 + SPA_2_YM
+        ld l,0
+        ld ix ,my_bufferb6_2
+        call create_line16
+        volume my_bufferb6_2
+
+        ld c,0
+        MIN_MAX 15,18,32
+        ld ix ,my_bufferb6_2
+        call settiles16
+
+        ld de,256-56-16
+        ld h, SPA_2_PAL_0 + SPA_2_YM
+        ld l,0
+        ld ix ,my_bufferb7_1
+        call create_line256
+        volume my_bufferb7_1
+
+        ld c,0
+        MIN_MAX 0,4,0
+        ld ix ,my_bufferb7_1
+        call settiles256
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+        ld de,256-(276/2)+40+8+2
+        ld h, SPA_2_PAL_0 + SPA_2_YM
+        ld l,0
+        ld ix ,my_bufferb7_2
+        call create_line256
+        volume my_bufferb7_2
+
+        ld c,0
+        MIN_MAX 4,8,0
+        ld ix ,my_bufferb7_2
+        call settiles256
+
+;;
+        ld de,256-(276/2)+40-16+8+2
+        ld h, SPA_2_PAL_0 + SPA_2_YM
+        ld l,0
+        ld ix ,my_bufferb7_3
+        call create_line256
+        volume my_bufferb7_3
+
+        ld c,0
+        MIN_MAX 8,12,0
+        ld ix ,my_bufferb7_3
+        call settiles256
+;;
+        ld de,256-(276/2)+40-16*2+8+2
+        ld h, SPA_2_PAL_0 + SPA_2_YM
+        ld l,0
+        ld ix ,my_bufferb7_4
+        call create_line256
+        volume my_bufferb7_4
+
+        ld c,0
+        MIN_MAX 12,16,0
+        ld ix ,my_bufferb7_4
+        call settiles256
 
         ret
 
     
 y__: dw 0
 
-create_line:
+create_line16:
         push hl                 ; save l for last batch
 
         ld bc,0
         ld (y__),de
-        set_sprite_first
+        set_sprite_first16
 
         ld a,7
 .lp0:   ex af,af'
@@ -461,7 +751,7 @@ create_line:
 
         ld bc,128
         ld de,(y__)
-        set_sprite_first
+        set_sprite_first16
 
         ld a,7
 .lp1:    ex af,af'
@@ -472,7 +762,7 @@ create_line:
 
         ld bc,256
         ld de,(y__)
-        set_sprite_first
+        set_sprite_first16
 
         pop hl
         ld a,7
@@ -484,8 +774,49 @@ create_line:
         jr nz ,.lp2
         ret
 
+create_line256:
+        push hl                 ; save l for last batch
+
+        ld bc,0
+        ld (y__),de
+        set_sprite_first256
+
+        ld a,7
+.lp0:   ex af,af'
+        set_sprite_next
+        ex af,af'
+        dec a
+        jr nz ,.lp0
+
+        ld bc,128
+        ld de,(y__)
+        set_sprite_first256
+
+        ld a,7
+.lp1:    ex af,af'
+        set_sprite_next
+        ex af,af'
+        dec a
+        jr nz ,.lp1
+
+        ld bc,256
+        ld de,(y__)
+        set_sprite_first256
+
+        pop hl
+        ld a,7
+        add a,l
+.lp2:   ex af,af'
+        set_sprite_next
+        ex af,af'
+        dec a
+        jr nz ,.lp2
+        ret
+
+
+
 shift_line:
-        add  a,(iy+2)
+        ld a,(iy+2)
         sub (iy+3)
  
         ld b,3
@@ -512,161 +843,179 @@ shift_line:
 
 
 
-
-update_toplines:
-  ;      my_break
-
-        ld bc,tm_entry_size
-        ld iy , tm_speeds+(tm_entry_size*0);
-
-        exx
-        ld ix,my_buffert1
-        ld a,0
-        call shift_line
-        exx
-        add iy,bc
-        exx
-
-        ld ix,my_buffert2
-        ld a,0
-        call shift_line
-        exx
-        add iy,bc
-        exx
-
-        ld ix,my_buffert3
-        ld a,0
-        call shift_line
-        exx
-        add iy,bc
-        exx
-
-        ld ix,my_buffert4
-        ld a,0
-        call shift_line
-        exx
-        add iy,bc
-        exx
-
-        ld ix,my_buffert5
-        ld a,(magic)
-        call shift_line
-
 draw_top:
+        DRAW_SECTION_PUSH
         ld bc, SPRITE_INDEX_OUT
         ld a,0
         out (c),a ; start at pattern 0
-
-        border 7
 
         ld a,(my_buffert1_vol)
         ld hl ,my_buffert1
         call sprite_copy
 
-        border 0
-
         ld a,(my_buffert2_vol)
         ld hl ,my_buffert2
         call sprite_copy
-
-        border 7
 
         ld a,(my_buffert3_vol)
         ld hl ,my_buffert3
         call sprite_copy
 
-        border 0
-
         ld a,(my_buffert4_vol)
         ld hl ,my_buffert4
         call sprite_copy
 
-        border 7
-
-        ld a,(my_buffert5_vol)
-        ld hl ,my_buffert5
+        ld a,(my_buffert5_1_vol)
+        ld hl ,my_buffert5_1
         call sprite_copy
-
-        border 0
-
+        
+        DRAW_SECTION_POP
         ret
 
-magic: db 0
-
-update_botlines:
-
-        ld bc,-tm_entry_size
-        ld iy , tm_speeds_bot+(tm_entry_size*5);
-
-        exx
-        ld ix,my_bufferb1
-        ld a,0
-        call shift_line
-        exx
-        add iy,bc
-        exx
-
-        ld ix,my_bufferb2
-        ld a,0
-        call shift_line
-        exx
-        add iy,bc
-        exx
-
-        ld ix,my_bufferb3
-        ld a,0
-        call shift_line
-        exx
-        add iy,bc
-        exx
-
-        ld ix,my_bufferb4
-        ld a,0
-        call shift_line
-        exx
-        add iy,bc
-        exx
-
-        ld ix,my_bufferb5
-        ld a,0
-        call shift_line
-
-        border 7
+draw_top_2nd:
+        DRAW_SECTION_PUSH
 
         ld bc, SPRITE_INDEX_OUT
         ld a,0
         out (c),a ; start at pattern 0
 
-        border 0
-        ld a,(my_bufferb1_vol)
-        ld hl ,my_bufferb1
+        ld a,(my_buffert5_2_vol)
+        ld hl ,my_buffert5_2
         call sprite_copy
 
-        border 7
-        ld a,(my_bufferb2_vol)
-        ld hl ,my_bufferb2
+        ld a,(my_buffert6_1_vol)
+        ld hl ,my_buffert6_1
         call sprite_copy
 
-        border 0
-        ld a,(my_bufferb3_vol)
-        ld hl ,my_bufferb3
+
+        ld a,(my_buffert6_2_vol)
+        ld hl ,my_buffert6_2
         call sprite_copy
 
-        border 7
+        ld a,(my_buffert7_1_vol)
+        ld hl ,my_buffert7_1
+        call sprite_copy
+
+        DRAW_SECTION_POP
+        ret
+
+draw_top_3rd:
+        DRAW_SECTION_PUSH
+        ld bc, SPRITE_INDEX_OUT
+        ld a,0
+        out (c),a ; start at pattern 0
+
+        ld a,(my_buffert7_4_vol)
+        ld hl ,my_buffert7_4
+        call sprite_copy
+
+        ld a,(my_buffert7_3_vol)
+        ld hl ,my_buffert7_3
+        call sprite_copy
+
+
+        ld a,(my_buffert7_2_vol)
+        ld hl ,my_buffert7_2
+        call sprite_copy
+
+        DRAW_SECTION_POP
+        ret
+
+
+
+
+draw_bottom_3rd:
+        DRAW_SECTION_PUSH
+
+        ld bc, SPRITE_INDEX_OUT
+        ld a,64
+        out (c),a ; start at pattern 0
+
+        ld a,(my_bufferb7_4_vol)
+        ld hl ,my_bufferb7_4
+        call sprite_copy
+
+        ld a,(my_bufferb7_2_vol)
+        ld hl ,my_bufferb7_2
+        call sprite_copy
+
+        ld a,(my_bufferb7_3_vol)
+        ld hl ,my_bufferb7_3
+        call sprite_copy
+
+        DRAW_SECTION_POP
+
+        ret
+
+draw_bottom_2nd:
+        DRAW_SECTION_PUSH
+
+        ld bc, SPRITE_INDEX_OUT
+        ld a,0
+        out (c),a ; start at pattern 0
+
+
+        ld a,(my_bufferb6_2_vol)
+        ld hl ,my_bufferb6_2
+        call sprite_copy
+
+        ld a,(my_bufferb6_1_vol)
+        ld hl ,my_bufferb6_1
+        call sprite_copy
+
+
+        ld a,(my_bufferb5_2_vol)
+        ld hl ,my_bufferb5_2
+        call sprite_copy
+
+
+        ld a,(my_bufferb7_1_vol)
+        ld hl ,my_bufferb7_1
+        call sprite_copy
+  
+
+        DRAW_SECTION_POP
+
+        ret
+
+ draw_bottom:
+        DRAW_SECTION_PUSH
+
+        ld bc, SPRITE_INDEX_OUT
+        ld a,0
+        out (c),a ; start at pattern 0
+
+        ld a,(my_bufferb5_1_vol)
+        ld hl ,my_bufferb5_1
+        call sprite_copy
+
         ld a,(my_bufferb4_vol)
         ld hl ,my_bufferb4
         call sprite_copy
 
-        border 0
-        ld a,(my_bufferb5_vol)
-        ld hl ,my_bufferb5
+        ld a,(my_bufferb3_vol)
+        ld hl ,my_bufferb3
         call sprite_copy
 
-        border 3
+
+        ld a,(my_bufferb2_vol)
+        ld hl ,my_bufferb2
+        call sprite_copy
+
+
+        ld a,(my_bufferb1_vol)
+        ld hl ,my_bufferb1
+        call sprite_copy
+
+        DRAW_SECTION_POP
 
         ret
 
 sprite_copy
+        ld b,0
+        ld c,a
+        jr TransferDMASprite
+
         or a
         ret z
         ld b,a
@@ -675,28 +1024,90 @@ sprite_copy
         ret
 
 
+TransferDMASprite
+    di
+    ld (DMASourceS),hl
+    ld (DMALengthS),bc
+    ld hl,DMACodeS
+    ld b,DMACode_LenS
+    ld c,NEXT_DMA_PORT
+    otir
+    ei
+    ret
+
+DMACodeS db DMA_DISABLE
+        db %01111101                   ; R0-Transfer mode, A -> B, write adress 
+                                       ; + block length
+DMASourceS dw 0                        ; R0-Port A, Start address (source address)
+DMALengthS dw 0                        ; R0-Block length (length in bytes)
+        db %01010100                   ; R1-read A time byte, increment, to 
+                                       ; memory, bitmask
+        db %00000010                   ; R1-Cycle length port A
+        db %01101000                   ; R2-write B time byte, increment, to 
+                                       ; memory, bitmask
+        db %00000010                   ; R2-Cycle length port B
+        db %10101101                   ; R4-Continuous mode (use this for block
+                                       ; transfer), write dest adress
+        dw SPRITE_ATTRIBUTE_OUT           ; R4-Dest address (destination address)
+        db %10000010                   ; R5-Restart on end of block, RDY active
+                                       ; LOW
+        db DMA_LOAD                    ; R6-Load
+        db DMA_ENABLE                  ; R6-Enable DMA
+DMACode_LenS                   equ *-DMACodeS
+
+
 my_buffert1_vol:        ds 1
 my_buffert2_vol:        ds 1
 my_buffert3_vol:        ds 1
 my_buffert4_vol:        ds 1
-my_buffert5_vol:        ds 1
+my_buffert5_1_vol:        ds 1
+my_buffert5_2_vol:        ds 1
+my_buffert6_1_vol:        ds 1
+my_buffert6_2_vol:        ds 1
+my_buffert7_1_vol:        ds 1
+my_buffert7_2_vol:        ds 1
+my_buffert7_3_vol:        ds 1
+my_buffert7_4_vol:        ds 1
+
 
 my_bufferb1_vol:        ds 1
 my_bufferb2_vol:        ds 1
 my_bufferb3_vol:        ds 1
 my_bufferb4_vol:        ds 1
-my_bufferb5_vol:        ds 1
+my_bufferb5_1_vol:        ds 1
+my_bufferb5_2_vol:        ds 1
+my_bufferb6_1_vol:        ds 1
+my_bufferb6_2_vol:        ds 1
+my_bufferb7_1_vol:        ds 1
+my_bufferb7_2_vol:        ds 1
+my_bufferb7_3_vol:        ds 1
+my_bufferb7_4_vol:        ds 1
 
 
 my_buffert1:            ds 200
 my_buffert2:            ds 200
 my_buffert3:            ds 200
 my_buffert4:            ds 200
-my_buffert5:            ds 200
+my_buffert5_1:            ds 200
+my_buffert5_2:            ds 200
+my_buffert6_1:            ds 200
+my_buffert6_2:            ds 200
+my_buffert7_1:        ds 200
+my_buffert7_2:        ds 200
+my_buffert7_3:        ds 200
+my_buffert7_4:        ds 200
+
 
 
 my_bufferb1:            ds 200
 my_bufferb2:            ds 200
 my_bufferb3:            ds 200
 my_bufferb4:            ds 200
-my_bufferb5:            ds 200
+my_bufferb5_1:            ds 200
+my_bufferb5_2:            ds 200
+my_bufferb6_1:            ds 200
+my_bufferb6_2:            ds 200
+my_bufferb7_1:        ds 200
+my_bufferb7_2:        ds 200
+my_bufferb7_3:        ds 200
+my_bufferb7_4:        ds 200

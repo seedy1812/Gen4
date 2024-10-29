@@ -4,7 +4,7 @@
 
 video_setup:
        nextreg ULA_CONTROL,%10000000   ;ula disable
- ;      nextreg ULA_CONTROL,%00000000   ;ula disable
+;       nextreg ULA_CONTROL,%00000000   ;ula disable
 
        nextreg SPRITE_LAYERS_SYSTEM,%01101011 ; SUL + Sprites in border
 
@@ -82,22 +82,25 @@ if 1
 
 
 do_copper:
+;my_break
 	nextreg COPPER_ADDR_LSB,0   ; LSB = 0
 	nextreg COPPER_CTRL,0   ;// copper stop | MSBs = 00
-
-@lp1:	ld	a,(hl)  ;// write the bytes of the copper
+if 0
+lp1:	ld	a,(hl)  ;// write the bytes of the copper
 	nextreg COPPER_DATA,a
+       border a
 	inc	hl
        dec bc
 	ld	a,b
 	or	c
-	jr	nz,@lp1		
+	jr	nz,lp1		
+else   
+       call dma_copper
+endif
+       border 1
 
-;       border 1
-
-
+     	nextreg COPPER_CTRL,%01000000 ;// copper start | MSBs = 00
 	ret
-endif 
 
 swap_frames:
               ld a,LAYER_2_SHADOW_BANK

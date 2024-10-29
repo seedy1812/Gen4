@@ -21,17 +21,18 @@ IM_2_Table:
         dw      inthandler      ; 15
 
 wait_vbl:
-	border 0
+	border 2
     ld hl,irq_counter 
 	ld a,(hl)
 .loop:
-	border 7
+;    border a
+;	border 7
 	halt
-	border 5
+;	border 5
     cp (hl)
     jr z,.loop
 	ld (hl),0
-	border 0
+	border 4
 	ret
 
 irq_counter: db 0
@@ -55,31 +56,54 @@ set_linehandler:
     or l
     nextreg LINE_INT_CTRL,a
 
-    ld (linehandler_address),de
+    ld (IM_2_Table),de
 
     ret
 
 
+
+linehandler_ptr : dw linehandler_table
+
+linehandler_table:
+    dw draw_top, 192+32
+    dw draw_top_2nd, 6-2
+    dw draw_top_3rd, 37
+    dw update_botlines, 60
+
+    dw draw_bottom_3rd, 94
+   dw update_toplines,100
+    dw draw_bottom_2nd, 149
+    dw draw_bottom, 180+1
+    dw 0
+
+
 toggle_linehandler:
-    ld a,(toggle_variable)
-    cpl
-    ld (toggle_variable),a
+    ld hl,(linehandler_ptr)
+.again:
+    ld e,(hl)   ; first word is function 
+    inc hl
+    ld d,(hl)
+    inc hl
 
-    or a
-    jr z ,.other
+    ld a,d          ; null function means loop
+    or e
+    jr nz,.no_loop
 
+    ld hl,linehandler_table
+    ld (linehandler_ptr),hl
+    jr .again
 
-    border 1
-    ld bc,167-16
-    ld de,update_botlines
+.no_loop:  
+    ld c,(hl)       ; 2nd word is scan line
+    inc hl
+    ld b,(hl)
+    inc hl
+
+    ld (linehandler_ptr),hl
+
     jr set_linehandler
-.other:
-    border 6
-    ld bc,192+32
-    ld de,update_toplines
-    jr set_linehandler
 
-toggle_variable: db 0
+
 
 
 init_vbl:
@@ -108,18 +132,19 @@ init_vbl:
     ret
 
 
+irq_stuff: db 0
+
+
 vbl:
 	di
-	push af
 
     border 4
 
-
- 	ld a,(irq_counter)
+    push af
+    ld a,(irq_counter)
     inc a
- 	ld (irq_counter),a
-
-	pop af
+    ld (irq_counter),a
+    pop AF
 
     NextReg $c8,1
     ei
@@ -129,48 +154,6 @@ vbl:
 nothing: ret
 
 linehandler:
-
-    push af
-	border 5
-
-    push bc
-    push de
-    push hl
-
-    push ix
-    push iy
-
-    exx
-
-    push af
-    push bc
-    push de
-    push hl
-
-linehandler_address: equ *+1
-    call nothing
-
-    call toggle_lineHandler
-
-    pop hl
-    pop de
-    pop bc
-    pop af
-
-
-    exx
-
-    pop iy
-    pop ix
-
-
-    pop hl
-    pop de
-    pop bc
-
-
-    pop af
-
     NextReg $c8,2
     ei
     reti
